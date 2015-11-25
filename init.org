@@ -441,6 +441,7 @@ emacs was first started.
     markdown-mode
     moinmoin-mode
     org
+    polymode
     projectile
     rainbow-delimiters
     visual-regexp
@@ -1931,6 +1932,24 @@ fact discover something every time I use it!
       (error (message "** could not activate discover")))
 #+END_SRC
 
+* polymode
+Try to call polymode
+
+#+BEGIN_SRC elisp
+(condition-case nil
+    (require 'poly-R)
+  (error (message "** could not load poly-R")))
+#+END_SRC
+
+#+BEGIN_SRC elisp
+(condition-case nil
+    (require 'poly-markdown)
+  (error (message "** could not load poly-markdown")))
+#+END_SRC
+
+#+BEGIN_SRC elisp
+(push '("\\.Rmd" . poly-markdown+r-mode) auto-mode-alist)
+#+END_SRC
 * enable "advanced" commands
 
 Not sure why these are disabled by default.
@@ -1966,3 +1985,4 @@ function, so don't do that.
 ;; You should have received a copy of the GNU General Public License
 ;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #+END_SRC
+

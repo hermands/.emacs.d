@@ -1,0 +1,25 @@
+
+;; ----- smex-history -----
+(
+ init-load
+ package-install
+ package-list-packages
+ comment-region
+ uncomment-region
+ activate-venv
+ query-replace
+)
+
+;; ----- smex-data -----
+(
+ (package-list-packages . 4)
+ (install-packages . 1)
+ (comment-region . 24)
+ (uncomment-region . 12)
+ (query-replace . 10)
+ (ess-set-working-directory . 4)
+ (save-buffers-kill-emacs . 1)
+ (activate-venv . 1)
+ (init-load . 9)
+ (package-install . 1)
+)

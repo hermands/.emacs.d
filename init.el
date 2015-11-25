@@ -1,4 +1,3 @@
-
 (defvar my-alias-prefix "my/")
 
 (defun make-alias (fun &optional prefix)
@@ -126,6 +125,7 @@
     markdown-mode
     moinmoin-mode
     org
+    polymode
     projectile
     rainbow-delimiters
     visual-regexp
@@ -527,6 +527,14 @@ Assumes that the frame is only split into two."
              (if (equal "pico." (substring (buffer-name (current-buffer)) 0 5))
                  ;; (message "** running hook for pine/alpine")
                  (mail-mode))))
+
+(condition-case nil
+    (require 'poly-R)
+  (error (message "** could not load poly-R")))
+
+(condition-case nil
+    (require 'poly-markdown)
+  (error (message "** could not load poly-markdown")))
 
 (condition-case nil
     (require 'ess-site)
@@ -961,6 +969,8 @@ following line."
       (require 'discover)
       (global-discover-mode 1))
       (error (message "** could not activate discover")))
+
+(push '("\\.Rmd" . poly-markdown+r-mode) auto-mode-alist)
 
 (put 'downcase-region 'disabled nil)
 (put 'upcase-region 'disabled nil)
