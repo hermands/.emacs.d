@@ -289,7 +289,7 @@
 
 (if (require 'hydra nil 'noerror)
     (progn
-      (defhydra hydra-launcher (:color teal)
+      (defhydra hydra-launcher (:color teal :columns 4)
         "hydra-launcher"
         ("C-g" redraw-display "<quit>")
         ("d" insert-date "insert-date")
@@ -304,7 +304,8 @@
         ("p" package-list-packages "package-list-packages")
         ("r" redraw-display "redraw-display")
         ("s" ssh-refresh "ssh-refresh")
-        ("t" org-todo-list "org-todo-list"))
+        ("t" org-todo-list "org-todo-list")
+        ("v" activate-venv "activate-venv"))
 
       (global-set-key (kbd "C-c l") 'hydra-launcher/body))
   (message "** hydra is not installed"))
@@ -344,9 +345,10 @@
             (car (split-string
                   (shell-command-to-string
                    (if (eq system-type 'darwin)
- "ls -t $(find /tmp/* -user $USER -name Listeners 2> /dev/null)"
- "ls -t $(find /tmp/ssh-* -user $USER -name 'agent.*' 2> /dev/null)"
- )))))
+                       "cat ~/.ssh-auth-sock"
+                     ;; "ls -t $(find /tmp/* -user $USER -name Listeners 2> /dev/null)"
+                     "ls -t $(find /tmp/ssh-* -user $USER -name 'agent.*' 2> /dev/null)"
+                     )))))
     (message
      (format "SSH_AUTH_SOCK %s --> %s"
              ssh-auth-sock-old (getenv "SSH_AUTH_SOCK")))))
@@ -566,6 +568,7 @@ Assumes that the frame is only split into two."
              ;; key bindings for org-promote/demote-subtree
              (define-key org-mode-map (kbd "M-S-<right>") 'org-do-demote)
              (define-key org-mode-map (kbd "M-S-<left>") 'org-do-promote)
+             (define-key org-mode-map (kbd "C-c n")  'hydra-org-navigation/body)
              (visual-line-mode)
              ;; org-babel
              (org-babel-do-load-languages
@@ -593,8 +596,8 @@ Assumes that the frame is only split into two."
 
 (if (require 'hydra nil 'noerror)
     (progn
-      (defhydra hydra-magit-navigation (:exit nil :foreign-keys warn)
-        "hydra-magit-navigation"
+      (defhydra hydra-org-navigation (:exit nil :foreign-keys warn)
+        "hydra-org-navigation"
         ("i" org-previous-item "org-previous-item")
         ("k" org-next-item "org-next-item")
         ("<right>" org-next-block "org-next-block")
@@ -605,8 +608,7 @@ Assumes that the frame is only split into two."
         ("S-<up>" org-backward-paragraph "org-backward-paragraph")
         ("q" nil "<quit>")))
   (message "** hydra is not installed"))
-
-(define-key org-mode-map (kbd "C-c n")  'hydra-magit-navigation/body)
+;; org-mode-map binds "C-c n" in org-mode-map
 
 (defun insert-date ()
   ;; Insert today's timestamp in format "<%Y-%m-%d %a>"
@@ -764,6 +766,9 @@ project; otherwise activate the virtualenv defined in
      "*autopep8 errors*"        ;; name of the error buffer
      t)                         ;; show error buffer?
     (ediff-buffers (current-buffer) p8-output)))
+
+(add-to-list 'auto-mode-alist '("\\.zsh\\'" . sh-mode))
+(add-to-list 'auto-mode-alist '("\\.bash\\'" . sh-mode))
 
 (defun scons-insert-command ()
   (interactive)
