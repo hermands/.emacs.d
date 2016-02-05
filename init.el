@@ -531,14 +531,6 @@ Assumes that the frame is only split into two."
                  (mail-mode))))
 
 (condition-case nil
-    (require 'poly-R)
-  (error (message "** could not load poly-R")))
-
-(condition-case nil
-    (require 'poly-markdown)
-  (error (message "** could not load poly-markdown")))
-
-(condition-case nil
     (require 'ess-site)
   (error (message "** could not load ESS")))
 
@@ -974,6 +966,14 @@ following line."
       (require 'discover)
       (global-discover-mode 1))
       (error (message "** could not activate discover")))
+
+(condition-case nil
+    (require 'poly-R)
+  (error (message "** could not load poly-R")))
+
+(condition-case nil
+    (require 'poly-markdown)
+  (error (message "** could not load poly-markdown")))
 
 (push '("\\.Rmd" . poly-markdown+r-mode) auto-mode-alist)
 

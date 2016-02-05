@@ -1015,6 +1015,7 @@ Some additional keyboard macro bindings.
 (global-set-key (kbd "<f5>") 'call-last-kbd-macro)
 #+END_SRC
 
+
 * ediff
 Always split windows horizontally.
 
