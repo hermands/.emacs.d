@@ -107,6 +107,7 @@
   '(ace-jump-mode
     ace-jump-buffer
     auctex
+    csv-mode
     discover
     edit-server
     elpy
@@ -140,6 +141,26 @@
   (package-install-list my-package-list))
 (make-alias 'install-packages)
 
+(if (require 'hydra nil 'noerror)
+    (progn
+      (defhydra hydra-toggle-mode (:color blue :columns 4 :post (redraw-display))
+        "hydra-toggle-mode"
+        ("RET" redraw-display "<quit>")
+        ("c" csv-mode "csv-mode")
+        ("j" jinja2-mode "jinja2-mode")
+        ("k" markdown-mode "markdown-mode")
+        ("l" lineum-mode "lineum-mode")
+        ("m" moinmoin-mode "moinmoin-mode")
+        ("o" org-mode "org-mode")
+        ("p" python-mode "python-mode")
+        ("r" R-mode "R-mode")
+        ("s" sql-mode "sql-mode")
+        ("t" text-mode "text-mode")
+        ("v" visual-line-mode "visual-line-mode")
+        ("y" yaml-mode "yaml-mode")
+        ))
+  (message "** hydra is not installed"))
+
 (defmacro csetq (variable value)
   `(funcall (or (get ',variable 'custom-set)
                 'set-default)
@@ -158,6 +179,7 @@
       (require 'helm-config)
       (helm-mode 1)
       (global-set-key (kbd "M-x") 'helm-M-x)
+      (global-set-key (kbd "C-x C-f") 'helm-find-files)
       (global-set-key (kbd "M-y") 'helm-show-kill-ring)
       (global-set-key (kbd "C-c h o") 'helm-occur)
       (global-set-key (kbd "C-h SPC") 'helm-all-mark-rings)
@@ -172,6 +194,23 @@
       (require 'helm-descbinds)
       (global-set-key (kbd "C-h b") 'helm-descbinds))
   (error (message "** could not activate helm-descbinds")))
+
+(if (require 'hydra nil 'noerror)
+    (progn
+      (defhydra hydra-helm (:color blue :columns 4 :post (redraw-display))
+        "hydra-toggle-mode"
+        ("RET" redraw-display "<quit>")
+        ("b" helm-browse-project "helm-browse-project")
+        ("d" helm-descbinds "helm-descbinds")
+        ("f" helm-projectile-find-file-dwim "helm-projectile-find-file-dwim")
+        ("g" helm-projectile-grep "helm-projectile-grep")
+        ("j" helm-projectile-switch-project "helm-projectile-switch-project")
+        ("o" helm-occur "helm-occur")
+        ("O" helm-org-in-buffer-headings "helm-org-in-buffer-headings")
+        ("p" helm-projectile "helm-projectile")
+        ("s" helm-swoop "helm-swoop")
+        ))
+  (message "** hydra is not installed"))
 
 (if (and (package-installed-p 'projectile) (package-installed-p 'helm-projectile))
     (progn
@@ -289,13 +328,15 @@
 
 (if (require 'hydra nil 'noerror)
     (progn
-      (defhydra hydra-launcher (:color teal :columns 4)
+      (defhydra hydra-launcher (:color teal :columns 4 :post (redraw-display))
         "hydra-launcher"
         ("C-g" redraw-display "<quit>")
         ("d" insert-date "insert-date")
         ("D" describe-minor-mode "describe-minor-mode")
         ("e" save-buffers-kill-emacs "save-buffers-kill-emacs")
         ("f" fix-frame "fix-frame")
+        ("g" hydra-toggle-mode/body "toggle mode")
+        ("h" hydra-helm/body "helm commands")
         ("i" init-edit "init-edit")
         ("n" my/find-org-index "my/find-org-index")
         ("N" my/org-index-add-entry "my/org-index-add-entry")
@@ -307,7 +348,8 @@
         ("t" org-todo-list "org-todo-list")
         ("v" activate-venv "activate-venv"))
 
-      (global-set-key (kbd "C-c l") 'hydra-launcher/body))
+      (global-set-key (kbd "C-c l") 'hydra-launcher/body)
+      (global-set-key (kbd "M-,") 'hydra-launcher/body))
   (message "** hydra is not installed"))
 
 (global-set-key (kbd "<f6>") 'linum-mode)
@@ -702,7 +744,7 @@ project; otherwise activate the virtualenv defined in
     (error "Error: no virtualenv is active"))
   (let ((dest "*elpy-install-requirements-output*")
         (install-cmd (format "%s/bin/pip install --force '%%s'" pyvenv-virtual-env))
-        (deps '("jedi" "pyflakes" "pep8" "flake8" "importmagic")))
+        (deps '("jedi" "pyflakes" "pep8" "flake8" "importmagic" "yapf")))
     (generate-new-buffer dest)
     (mapcar
      #'(lambda (pkg)
