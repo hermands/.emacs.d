@@ -37,8 +37,8 @@
   (switch-to-buffer "*Messages*"))
 (make-alias 'init-tangle-and-load)
 
-(unless (= emacs-major-version 24)
-  (error "Emacs version 24 is required"))
+(unless (>= emacs-major-version 24)
+  (error "Emacs version 24 or higher is required"))
 
 (message "loading ~/.emacs.d/init.el")
 
@@ -62,19 +62,46 @@
           ))
 
   ;; Check if we're on Emacs 24.4 or newer, if so, use the pinned package feature
-  ;; note that elpy installation fails when pinned to elpy package
   (when (boundp 'package-pinned-packages)
     (setq package-pinned-packages
           '((elpy . "elpy")
-            (highlight-indentation . "elpy") ;; fixes error in elpy 1.6
-            (org . "org")
-            (magit . "melpa-stable")
+            (flycheck . "melpa-stable")
             (helm-descbinds . "melpa-stable")
             (helm-swoop . "melpa-stable")
+            (highlight-indentation . "elpy") ;; fixes error in elpy 1.6
             (hydra . "gnu")
+            (magit . "melpa-stable")
+            (markdown-mode . "melpa-stable")
+            (org . "org")
+            (smart-mode-line . "melpa-stable")
+            (swiper . "melpa-stable")
+            (web-mode . "melpa")
+            (which-key . "melpa-stable")
             )))
 
   (package-initialize))
+
+(setq package-archive-priorities
+      '(("org" . 30)
+        ("elpy" . 30)
+        ("melpa-stable" . 20)
+        ("marmalade" . 10)
+        ("gnu" . 10)
+        ("melpa" . 5)))
+(setq package-menu-hide-low-priority t)
+
+(unless (package-installed-p 'use-package)
+  (if (yes-or-no-p "use-package is not installed yet - install it? ")
+      (progn
+        ;; bootstrap use-package
+        (message "** installing use-package")
+        (package-refresh-contents)
+        (package-install 'use-package))
+    (message "** defining fake use-package macro")
+    (defmacro use-package (pkg &rest args)
+      (warn
+       "use-package is not installed - could not activate %s" (symbol-name pkg))
+      )))
 
 (defun package-installed-not-builtin-p (package &optional min-version)
   "Return true if PACKAGE, of MIN-VERSION or newer, is installed
@@ -104,15 +131,15 @@
   (message "done installing packages"))
 
 (defvar my-package-list
-  '(ace-jump-mode
-    ace-jump-buffer
-    auctex
+  '(auctex
     csv-mode
     discover
+    dash-at-point
     edit-server
     elpy
     ess
     expand-region
+    flycheck
     gist
     git-timemachine
     helm
@@ -126,12 +153,18 @@
     markdown-mode
     moinmoin-mode
     org
+    ox-minutes
     polymode
     projectile
     rainbow-delimiters
+    smart-mode-line
+    swiper
     visual-regexp
     visual-regexp-steroids
+    web-mode
+    which-key
     yaml-mode
+    yasnippet
     yas-jit))
 
 (defun install-packages ()
@@ -147,6 +180,7 @@
         "hydra-toggle-mode"
         ("RET" redraw-display "<quit>")
         ("c" csv-mode "csv-mode")
+        ("h" html-mode "html-mode")
         ("j" jinja2-mode "jinja2-mode")
         ("k" markdown-mode "markdown-mode")
         ("l" lineum-mode "lineum-mode")
@@ -157,6 +191,7 @@
         ("s" sql-mode "sql-mode")
         ("t" text-mode "text-mode")
         ("v" visual-line-mode "visual-line-mode")
+        ("w" web-mode "web-mode")
         ("y" yaml-mode "yaml-mode")
         ))
   (message "** hydra is not installed"))
@@ -202,7 +237,7 @@
         ("RET" redraw-display "<quit>")
         ("b" helm-browse-project "helm-browse-project")
         ("d" helm-descbinds "helm-descbinds")
-        ("f" helm-projectile-find-file-dwim "helm-projectile-find-file-dwim")
+        ("f" helm-projectile-find-file "helm-projectile-find-file")
         ("g" helm-projectile-grep "helm-projectile-grep")
         ("j" helm-projectile-switch-project "helm-projectile-switch-project")
         ("o" helm-occur "helm-occur")
@@ -219,111 +254,61 @@
       (helm-projectile-on))
   (message "** not using projectile or helm-projectile - one or both not installed"))
 
-(require 'ibuffer)
-(global-set-key (kbd "C-x C-g") 'ibuffer)
-(global-set-key (kbd "C-x M-g") 'ibuffer-switch-to-saved-filter-groups)
-(setq ibuffer-show-empty-filter-groups nil)
+(when (boundp 'grep-find-ignored-directories)
+  (add-to-list 'grep-find-ignored-directories ".eggs")
+  (add-to-list 'grep-find-ignored-directories "src"))
 
-(defvar my-ibuffer-config-file "~/.emacs.d/ibuffer-config.el")
-
-(defun ibuffer-load-config ()
-  ;; load the ibuffer config file
+(defun grep-ignore-venv-current-project (&rest args)
   (interactive)
-  (condition-case nil
-      (progn
-        (message (format "** loading ibuffer config in %s" my-ibuffer-config-file))
-        (load my-ibuffer-config-file)
-        )
-    (error (message (format "** could not load %s" my-ibuffer-config-file))))
-  )
+  (let ((venv (find-venv-current-project)))
+    (if venv
+        (progn
+          (setq venv (file-name-nondirectory
+                      (replace-regexp-in-string "/$" "" venv)))
+          (message "adding '%s' to grep-find-ignored-directories" venv)
+          (add-to-list 'grep-find-ignored-directories venv))
+      (message "no virtualenv at this location")
+      )))
 
-(ibuffer-load-config)
-
-(defun ibuffer-show-all-filter-groups ()
-  "Show all filter groups"
-  (interactive)
-  (setq ibuffer-hidden-filter-groups nil)
-  (ibuffer-update nil t))
-
-(defun ibuffer-hide-all-filter-groups ()
-  "Hide all filter groups"
-  (interactive)
-  (setq ibuffer-hidden-filter-groups
-        (delete-dups
-         (append ibuffer-hidden-filter-groups
-                 (mapcar 'car (ibuffer-generate-filter-groups
-                               (ibuffer-current-state-list)
-                               (not ibuffer-show-empty-filter-groups)
-                               t)))))
-  (ibuffer-update nil t))
-
-(defun ibuffer-reload ()
-  ;; kill ibuffer, reload the config file, and return to ibuffer
-  (interactive)
-  (ibuffer)
-  (kill-buffer)
-  (ibuffer-load-config)
-  (ibuffer)
-  )
-
-(defun my-ibuffer-sort-hook ()
-  ;; add another sorting method for ibuffer (allow the grouping of
-  ;; filenames and dired buffers
-  (define-ibuffer-sorter filename-or-dired
-    "Sort the buffers by their pathname."
-    (:description "filenames plus dired")
-    (string-lessp
-     (with-current-buffer (car a)
-       (or buffer-file-name
-           (if (eq major-mode 'dired-mode)
-               (expand-file-name dired-directory))
-           ;; so that all non pathnames are at the end
-           "~"))
-     (with-current-buffer (car b)
-       (or buffer-file-name
-           (if (eq major-mode 'dired-mode)
-               (expand-file-name dired-directory))
-           ;; so that all non pathnames are at the end
-           "~"))))
-  (define-key ibuffer-mode-map (kbd "s p")     'ibuffer-do-sort-by-filename-or-dired)
-  )
-
-(defun ibuffer-ediff-marked-buffers ()
-  "Compare two marked buffers using ediff"
-  (interactive)
-  (let* ((marked-buffers (ibuffer-get-marked-buffers))
-         (len (length marked-buffers)))
-    (unless (= 2 len)
-      (error (format "%s buffer%s been marked (needs to be 2)"
-                     len (if (= len 1) " has" "s have"))))
-    (ediff-buffers (car marked-buffers) (cadr marked-buffers))))
-
-(add-hook 'ibuffer-mode-hook
-          '(lambda ()
-             (ibuffer-auto-mode 1) ;; minor mode that keeps the buffer list up to date
-             (ibuffer-switch-to-saved-filter-groups "default")
-             (define-key ibuffer-mode-map (kbd "a") 'ibuffer-show-all-filter-groups)
-             (define-key ibuffer-mode-map (kbd "z") 'ibuffer-hide-all-filter-groups)
-             (define-key ibuffer-mode-map (kbd "e") 'ibuffer-ediff-marked-buffers)
-             (my-ibuffer-sort-hook)
-             ;; don't accidentally print; see http://irreal.org/blog/?p=2013
-             (defadvice ibuffer-do-print (before print-buffer-query activate)
-               (unless (y-or-n-p "Print buffer? ")
-                 (error "Cancelled")))
-             )
-          )
+(advice-add 'rgrep :before #'grep-ignore-venv-current-project)
+(advice-add 'projectile-grep :before #'grep-ignore-venv-current-project)
+(advice-add 'helm-projectile-grep :before #'grep-ignore-venv-current-project)
 
 (require 'uniquify)
 (setq uniquify-buffer-name-style 'post-forward)
 
-(define-key global-map (kbd "M-'") 'ace-jump-mode)
+(use-package swiper
+             :ensure t
+             :bind (("C-s" . swiper)))
+
+(use-package avy
+             :ensure t
+             :bind (("M-'" . avy-goto-word-1)))
+
+(defun my/mark-inside-quotes ()
+  "Mark string between two quote charactes (double, single, or grave accent)"
+  (interactive)
+  (unless (re-search-forward "[\"'`]" nil t)
+    (error "No quote character after the cursor"))
+  (backward-char 1)
+  (set-mark (point))
+  (unless (re-search-backward "[\"'`]" nil t)
+    (error "No matching quote character before the cursor"))
+  (forward-char 1)
+  (exchange-point-and-mark))
+
+(defun my/mark-first-quoted-string ()
+  (interactive)
+  (re-search-forward "[\"'`]" nil t)
+  (my/mark-inside-quotes))
 
 (if (require 'hydra nil 'noerror)
-    (progn
-      (defhydra hydra-expand-region (global-map "M-=")
-        "hydra-expand-region"
-        ("=" er/expand-region "er/expand-region")
-        ("-" er/contract-region "er/contract-region")))
+    (defhydra hydra-expand-region (global-map "M-=")
+      "hydra-expand-region"
+      ("=" er/expand-region "er/expand-region")
+      ("-" er/contract-region "er/contract-region")
+      ("q" my/mark-inside-quotes "my/mark-inside-quotes" :color blue)
+      ("Q" my/mark-first-quoted-string "my/mark-first-quoted-string" :color blue))
   (message "** hydra is not installed"))
 
 (if (require 'hydra nil 'noerror)
@@ -331,8 +316,10 @@
       (defhydra hydra-launcher (:color teal :columns 4 :post (redraw-display))
         "hydra-launcher"
         ("C-g" redraw-display "<quit>")
+        ("RET" redraw-display "<quit>")
+        ("b" copy-buffer-file-name "copy-buffer-file-name")
         ("d" insert-date "insert-date")
-        ("D" describe-minor-mode "describe-minor-mode")
+        ("D" dash-at-point "dash-at-point")
         ("e" save-buffers-kill-emacs "save-buffers-kill-emacs")
         ("f" fix-frame "fix-frame")
         ("g" hydra-toggle-mode/body "toggle mode")
@@ -342,15 +329,23 @@
         ("N" my/org-index-add-entry "my/org-index-add-entry")
         ("m" magit-status "magit-status")
         ("o" copy-region-or-line-other-window "copy-region-or-line-other-window")
-        ("p" package-list-packages "package-list-packages")
-        ("r" redraw-display "redraw-display")
+        ("p" hydra-python/body "python menu")
+        ("P" list-processes "list-processes")
         ("s" ssh-refresh "ssh-refresh")
         ("t" org-todo-list "org-todo-list")
-        ("v" activate-venv "activate-venv"))
-
-      (global-set-key (kbd "C-c l") 'hydra-launcher/body)
-      (global-set-key (kbd "M-,") 'hydra-launcher/body))
+        ("T" transpose-buffers "transpose-buffers")
+        ("u" untabify "untabify")
+        ("w" hydra-web-mode/body "web-mode commands"))
+      (global-set-key (kbd "C-\\") 'hydra-launcher/body))
   (message "** hydra is not installed"))
+
+(use-package which-key
+  :ensure t
+  :pin melpa-stable  ;; this has no effect but I'll leave it here
+                     ;; until the apparent bug in use-package is fixed
+                     ;; (in the meantime, the repo is pinned using
+                     ;; package-pinned-packages)
+  :config (which-key-mode))
 
 (global-set-key (kbd "<f6>") 'linum-mode)
 (global-set-key (kbd "<f7>") 'visual-line-mode)
@@ -366,9 +361,15 @@
 (setq suggest-key-bindings 4)
 (show-paren-mode 1)
 
-(setq display-time-day-and-date t
-      display-time-24hr-format t)
-(display-time)
+(if (require 'smart-mode-line nil 'noerror)
+    (progn
+      (setq sml/no-confirm-load-theme t)
+      (setq sml/theme 'light)
+      (setq sml/name-width 30)
+      ;; (setq sml/mode-width 'full)
+      (setq sml/time-format "%H:%M")
+      (sml/setup))
+  (message "** smart-mode-line is not installed"))
 
 (setq frame-title-format
       (list (format "%s %%S: %%j " (system-name))
@@ -440,7 +441,7 @@
            (set-keyboard-coding-system 'mac-roman)
            (setq mac-option-modifier 'meta)
            (setq mac-command-key-is-meta nil)
-           (set-default-font-verbosely "Bitstream Vera Sans Mono-14")))
+           (set-default-font-verbosely "Menlo-14")))
         ((string= "x" window-system)
          (progn
            (message (format "** running %s windowing system" window-system))
@@ -558,13 +559,38 @@ Assumes that the frame is only split into two."
 
 (setq split-height-threshold nil)
 
-(define-key global-map (kbd "M-\"") 'ace-jump-buffer)
+(defvar enable-flyspell-p)
 
-(setq-default ispell-program-name "aspell")
-(setq ispell-dictionary "en")
+;; (setq debug-on-error t)
+;; (setq debug-on-signal t)
 
-(autoload 'flyspell-mode "flyspell" "On-the-fly spelling checker." t)
-(setq flyspell-issue-welcome-flag nil) ;; fix error message
+(if (cond
+     ;; ((executable-find "hunspell")
+     ;;  (setq ispell-local-dictionary "en_US")
+     ;;  (setq ispell-local-dictionary-alist
+     ;;        '(("en_US"                                  ;; DICTIONARY-name
+     ;;           "[[:alpha:]]"                            ;; CASECHARS
+     ;;           "[^[:alpha:]]"                           ;; NOT-CASECHARS
+     ;;           "[']"                                    ;; OTHERCHARS
+     ;;           nil                                      ;; MANY-OTHERCHARS-P
+     ;;           ("-d" "~/.emacs.d/dictionaries/en_US")   ;; ISPELL-ARGS
+     ;;           ;; ("-d" "en_US")   ;; ISPELL-ARGS
+     ;;           nil                                      ;; EXTENDED-CHARACTER-MODE
+     ;;           utf-8                                    ;; CHARACTER-SET
+     ;;           )))
+     ;;  (setenv "DICPATH" "~/.emacs.d/dictionaries")
+     ;;  (setq-default ispell-program-name "hunspell")
+     ;;  (setq ispell-really-hunspell t))
+     ((executable-find "aspell")
+      (setq ispell-dictionary "en")
+      (setq ispell-program-name "aspell")))
+    (progn
+      (message "** using %s for flyspell" ispell-program-name)
+      (autoload 'flyspell-mode "flyspell" "On-the-fly spelling checker." t)
+      (setq flyspell-issue-welcome-flag nil)
+      (setq enable-flyspell-p t))
+  (setq enable-flyspell-p nil)
+  (message "** could not find hunspell or aspell"))
 
 (add-hook 'find-file-hooks
           '(lambda ()
@@ -572,9 +598,32 @@ Assumes that the frame is only split into two."
                  ;; (message "** running hook for pine/alpine")
                  (mail-mode))))
 
+(use-package yasnippet
+  :init
+  (progn
+    (add-hook 'after-save-hook
+              (lambda ()
+                (when (eql major-mode 'snippet-mode)
+                  (yas-reload-all)))))
+  :commands (yas-global-mode)
+  :mode ("\\.yasnippet" . snippet-mode))
+
 (condition-case nil
     (require 'ess-site)
   (error (message "** could not load ESS")))
+
+(defun set-inferior-ess-r-program-name ()
+     "Set `inferior-ess-r-program-name' as the absolute path to
+the R interpreter. On systems using
+'modules' (http://modules.sourceforge.net/), load the R module
+before defining the path."
+     (interactive)
+     (setq inferior-ess-r-program-name
+           (replace-regexp-in-string
+            "\n" ""
+            (shell-command-to-string
+             "which ml > /dev/null && (ml R; which R) || which R"))))
+(make-alias 'set-inferior-ess-r-program-name)
 
 (add-hook 'ess-mode-hook
           '(lambda()
@@ -585,9 +634,54 @@ Assumes that the frame is only split into two."
              ;; set ESS indentation style
              ;; choose from GNU, BSD, K&R, CLB, and C++
              (ess-set-style 'GNU 'quiet)
-             (flyspell-mode)
-             )
-          )
+             (if enable-flyspell-p (flyspell-mode))
+             (set-inferior-ess-r-program-name)))
+
+(if (require 'markdown-mode nil 'noerror)
+    (use-package markdown-mode
+      :commands (markdown-mode gfm-mode)
+      :mode (("README\\.md" . gfm-mode)
+             ("\\.md" . markdown-mode)
+             ("\\.markdown" . markdown-mode))
+      :bind (:map markdown-mode-map
+                  ;; don't redefine =M-<left>= and =M-<right>= in this mode
+                  ("M-<right>" . nil)
+                  ("M-<left>" . nil))
+      :init  (setq markdown-command "multimarkdown"))
+  (message "** markdown-mode is not installed"))
+
+(condition-case nil
+    (progn
+      (require 'poly-R)
+      (require 'poly-markdown)
+      (add-to-list 'auto-mode-alist '("\\.Rmd" . poly-markdown+r-mode))
+      ;; (add-to-list 'auto-mode-alist '("\\.md" . poly-markdown-mode))
+      (define-key polymode-mode-map (kbd "M-n r") 'my/ess-render-rmarkdown))
+  (error (message "** could not activate polymode")))
+
+(defun my/ess-render-rmarkdown ()
+  "Compile R markdown (.Rmd). Should work for any output type."
+  (interactive)
+  ;; Check if attached R-session
+  (condition-case nil
+      (ess-get-process)
+    (error
+     (ess-switch-process)))
+  (let* ((rmd-buf (current-buffer)))
+    (save-excursion
+      (let* ((sprocess (ess-get-process ess-current-process-name))
+             (sbuffer (process-buffer sprocess))
+             (buf-coding (symbol-name buffer-file-coding-system))
+             (buffer-file-name-html
+              (concat (file-name-sans-extension buffer-file-name) ".html"))
+             (R-cmd
+              (format
+               "library(rmarkdown); rmarkdown::render(\"%s\")" buffer-file-name)))
+        (save-buffer)
+        (message "Running rmarkdown on %s" buffer-file-name)
+        (ess-execute R-cmd 'buffer nil nil)
+        (switch-to-buffer rmd-buf)
+        (ess-show-buffer (buffer-name sbuffer) nil)))))
 
 (add-hook 'org-mode-hook
           '(lambda ()
@@ -605,16 +699,27 @@ Assumes that the frame is only split into two."
              (define-key org-mode-map (kbd "C-c n")  'hydra-org-navigation/body)
              (visual-line-mode)
              ;; org-babel
+
+             ;; enable a subset of languages for evaluation in code blocks
+             (setq my/org-babel-load-languages
+                   '((R . t)
+                     (latex . t)
+                     (python . t)
+                     (sql . t)
+                     (sqlite . t)
+                     (emacs-lisp . t)
+                     (dot . t)))
+
+             ;; use "shell" for org-mode versions 9 and above
+             (add-to-list 'my/org-babel-load-languages
+                          (if (>= (string-to-number (substring (org-version) 0 1)) 9)
+                              '(shell . t) '(sh . t)))
+
              (org-babel-do-load-languages
-              'org-babel-load-languages
-              '((R . t)
-                (latex . t)
-                (python . t)
-                (sh . t)
-                (sql . t)
-                (sqlite . t)
-                (dot . t)
-                ))
+              'org-babel-load-languages my/org-babel-load-languages)
+
+             (require 'ox-minutes nil t)
+
              ;; (defun org-with-silent-modifications(&rest args)
              ;;   "Replaces function causing error on org-export"
              ;;   (message "Using fake 'org-with-silent-modifications'"))
@@ -630,8 +735,10 @@ Assumes that the frame is only split into two."
 
 (if (require 'hydra nil 'noerror)
     (progn
-      (defhydra hydra-org-navigation (:exit nil :foreign-keys warn)
+      (defhydra hydra-org-navigation
+        (:exit nil :foreign-keys warn :columns 4 :post (redraw-display))
         "hydra-org-navigation"
+        ("RET" nil "<quit>")
         ("i" org-previous-item "org-previous-item")
         ("k" org-next-item "org-next-item")
         ("<right>" org-next-block "org-next-block")
@@ -673,22 +780,18 @@ Assumes that the frame is only split into two."
                    (org-add-entry "~/Dropbox/journal/journal.org"
                                   "\n* %A, %B %d, %Y")))
 
-(push '("\\.md" . markdown-mode) auto-mode-alist)
-
 (condition-case nil
     (edit-server-start)
   (error (message "** could not start edit-server (chrome edit with emacs)")))
 
 (add-hook 'python-mode-hook
           '(lambda ()
-             (message "Loading python-mode hooks")
              (setq indent-tabs-mode nil)
              (setq tab-width 4)
              (setq py-indent-offset tab-width)
              (setq py-smart-indentation t)
              (define-key python-mode-map "\C-m" 'newline-and-indent)
-             (setq python-check-command "~/.emacs.d/bin/pychecker")
-             ))
+             (elpy-mode)))
 
 (push '("SConstruct" . python-mode) auto-mode-alist)
 (push '("SConscript" . python-mode) auto-mode-alist)
@@ -696,46 +799,52 @@ Assumes that the frame is only split into two."
 
 (setq backward-delete-char-untabify-method "all")
 
-(condition-case nil
-    (elpy-enable) ;; install from ELPA
-  (error (message "** could not enable elpy")))
+(if (require 'flycheck nil 'noerror)
+    (use-package flycheck
+      :init
+      (setq flycheck-flake8rc "~/.emacs.d/flake8.conf")
+      (setq flycheck-check-syntax-automatically '(mode-enabled save)))
+  (message "** flycheck is not installed"))
 
-(defvar venv-default "~/.emacs.d/emacs-env")
-(defun activate-venv-default ()
+(if (require 'elpy nil 'noerror)
+    (use-package elpy
+      :bind (:map elpy-mode-map
+                  ("C-<right>" . nil)
+                  ("C-<left>" . nil)
+                  ("M-<right>" . nil)
+                  ("M-<left>" . nil)
+                  ("M-<right>" . nil)
+                  ("M-C-]" . elpy-nav-move-iblock-right)
+                  ("M-C-[" . elpy-nav-move-iblock-left))
+      :init
+      (when (require 'flycheck nil t)
+        (add-hook 'elpy-mode-hook 'flycheck-mode))
+      :config
+      (setq elpy-modules (delq 'elpy-module-django elpy-modules))
+      (setq elpy-modules (delq 'elpy-module-flymake elpy-modules))
+      (setq elpy-rpc-backend "jedi")
+      (add-to-list 'elpy-project-ignored-directories "src")
+      (add-to-list 'elpy-project-ignored-directories "*-env"))
+  (message "** elpy is not installed"))
+
+(defvar venv-default-py2 "~/.emacs.d/python2-env")
+(defvar venv-default-py3 "~/.emacs.d/python3-env")
+(defvar venv-default venv-default-py2)
+
+(defun activate-venv-and-reload (venv)
+  (pyvenv-activate venv)
+  (elpy-rpc-restart)
+  (elpy-mode))
+
+(defun activate-venv-default-py2 ()
   (interactive)
-  (pyvenv-activate venv-default)
-  (elpy-rpc-restart))
-(make-alias 'activate-venv-default)
+  (setq elpy-rpc-python-command "python2")
+  (activate-venv-and-reload venv-default-py2))
 
-(prepend-path "~/.emacs.d/emacs-env/bin")
-
-(defun activate-venv ()
-  "Activate a virtualenv if one can be found in the current
-project; otherwise activate the virtualenv defined in
-`venv-default'. Also restarts the elpy rpc process."
+(defun activate-venv-default-py3 ()
   (interactive)
-  (let ((venv nil)
-        (find-pattern "find %s -path '*bin/activate' -maxdepth 4")
-        (msg ""))
-
-    (if (elpy-project-root)
-        (setq venv
-              (replace-regexp-in-string
-               "/bin/activate[ \t\n]*" ""
-               (shell-command-to-string
-                (format find-pattern (elpy-project-root))))))
-
-    (if (< (length venv) 1)
-        (progn
-          (setq venv venv-default)
-          (setq msg "(cound not find a virtualenv here) ")))
-
-    (if (y-or-n-p (format "%sActivate %s?" msg venv))
-        (progn
-          (pyvenv-activate venv)
-          (elpy-rpc-restart)
-          (message "Using %s" pyvenv-virtual-env)))))
-(make-alias 'activate-venv)
+  (setq elpy-rpc-python-command "python3")
+  (activate-venv-and-reload venv-default-py3))
 
 (defun elpy-install-requirements ()
   "Install python requirements to the current virtualenv."
@@ -743,8 +852,8 @@ project; otherwise activate the virtualenv defined in
   (unless pyvenv-virtual-env
     (error "Error: no virtualenv is active"))
   (let ((dest "*elpy-install-requirements-output*")
-        (install-cmd (format "%s/bin/pip install --force '%%s'" pyvenv-virtual-env))
-        (deps '("jedi" "pyflakes" "pep8" "flake8" "importmagic" "yapf")))
+        (install-cmd (format "%s/bin/pip install -U --force '%%s'" pyvenv-virtual-env))
+        (deps '("elpy" "jedi" "pyflakes" "pep8" "flake8" "importmagic" "yapf")))
     (generate-new-buffer dest)
     (mapcar
      #'(lambda (pkg)
@@ -756,20 +865,45 @@ project; otherwise activate the virtualenv defined in
   (elpy-rpc-restart))
 (make-alias 'elpy-install-requirements)
 
-(add-hook 'elpy-mode-hook
-'(lambda ()
-   (define-key elpy-mode-map (kbd "C-<right>") nil)
-   (define-key elpy-mode-map (kbd "C-<left>") nil)
-   (define-key elpy-mode-map (kbd "M-<right>") nil)
-   (define-key elpy-mode-map (kbd "M-<left>") nil)
-   (define-key elpy-mode-map (kbd "M-<right>") nil)
-   (define-key elpy-mode-map (kbd "M-C-]") 'elpy-nav-move-iblock-right)
-   (define-key elpy-mode-map (kbd "M-C-[") 'elpy-nav-move-iblock-left)
-   (setq elpy-rpc-backend "jedi")
-   (add-to-list 'elpy-project-ignored-directories "src")
-   (add-to-list 'elpy-project-ignored-directories "*-env")
-   ;; (elpy-use-ipython)
-))
+(defun list-venvs (basedir)
+  "Return a list of paths to virtualenvs in 'basedir' or nil if
+ none can be found"
+  (interactive)
+  (let ((fstr "find %s -path '*bin/activate' -maxdepth 4")
+        (pth (replace-regexp-in-string "/$" "" basedir)))
+
+    (mapcar (lambda (string)
+              (replace-regexp-in-string "/bin/activate$" "" string))
+            (cl-remove-if
+             (lambda (string) (= (length string) 0))
+             (split-string (shell-command-to-string (format fstr pth)) "\n")))
+    ))
+
+(defun list-venvs-current-project ()
+  (if (elpy-project-root)
+      (list-venvs elpy-project-root)
+    (error "error: there is no project here")))
+
+(defun helm-choose-venv-current-project ()
+  (interactive)
+  (helm
+   :sources (helm-build-sync-source "choose a virtualenv"
+              :candidates 'list-venvs-current-project)
+   :buffer "*helm choose virtualenv*"))
+
+(defun activate-venv-current-project ()
+  "Activate a virtualenv if one can be found in the current
+project; otherwise activate the virtualenv defined in
+`venv-default'. Also restarts the elpy rpc process."
+  (interactive)
+  (let ((venv (helm-choose-venv-current-project)))
+    (if venv
+        (if (y-or-n-p (format "Activate %s?" venv))
+            (progn
+              (activate-venv-and-reload venv)
+              (message "Using %s" pyvenv-virtual-env)))
+      (message "could not find a virtualenv here"))))
+(make-alias 'activate-venv-current-project)
 
 (defun p8 ()
   "Apply autopep8 to the current region or buffer"
@@ -801,6 +935,22 @@ project; otherwise activate the virtualenv defined in
      t)                         ;; show error buffer?
     (ediff-buffers (current-buffer) p8-output)))
 
+(if (require 'hydra nil 'noerror)
+    (progn
+      (defhydra hydra-python (:color blue :columns 4 :post (redraw-display))
+        "hydra-python"
+        ("RET" redraw-display "<quit>")
+        ("2" activate-venv-default-py2 "activate-venv-default-py2")
+        ("3" activate-venv-default-py3 "activate-venv-default-py3")
+        ("c" flycheck-list-errors "flycheck-list-errors")
+        ("e" elpy-config "elpy-config")
+        ("f" flycheck-verify-setup "flycheck-verify-setup")
+        ("g" elpy-goto-definition-other-window "elpy-goto-definition-other-window")
+        ("i" elpy-install-requirements "elpy-install-requirements")
+        ("v" activate-venv-current-project "activate-venv-current-project")
+        ("y" elpy-yapf-fix-code "elpy-yapf-fix-code")))
+  (message "** hydra is not installed"))
+
 (add-to-list 'auto-mode-alist '("\\.zsh\\'" . sh-mode))
 (add-to-list 'auto-mode-alist '("\\.bash\\'" . sh-mode))
 
@@ -816,17 +966,34 @@ project; otherwise activate the virtualenv defined in
 (add-hook 'text-mode-hook
           '(lambda ()
              ;; (longlines-mode)
-             (flyspell-mode)
-             )
-          )
+             (if enable-flyspell-p (flyspell-mode))))
 
 (add-hook 'rst-mode-hook
           '(lambda ()
              (message "Loading rst-mode hooks")
-             (flyspell-mode)
-             (define-key rst-mode-map (kbd "C-c C-a") 'rst-adjust)
-             )
-          )
+             (if enable-flyspell-p (flyspell-mode))
+             (define-key rst-mode-map (kbd "C-c C-a") 'rst-adjust)))
+
+(condition-case nil
+    (require 'moinmoin-mode)
+  (error (message "** could not load moinmoin-mode")))
+
+(if (require 'web-mode nil 'noerror)
+    (use-package web-mode
+      :mode (("\\.html" . web-mode))
+      :bind ("C-c w" . hydra-web-mode/body)
+      :init
+      (setq web-mode-enable-current-element-highlight t)
+      (setq web-mode-engines-alist
+            '(("django" . "\\.html")))
+      (setq indent-tabs-mode nil)
+      (defhydra hydra-web-mode (:color blue :columns 4 :post (redraw-display))
+        "hydra-web-mode"
+        ("RET" redraw-display "<quit>")
+        ("b" web-mode-element-beginning "element-beginning")
+        ("e" web-mode-element-beginning "element-end")
+        ("/" web-mode-element-close "element-close")))
+  (message "** web-mode is not installed"))
 
 (condition-case nil
     (require 'tramp)
@@ -925,7 +1092,7 @@ This is used to set `sql-alternate-buffer-name' within
 
 (if (require 'hydra nil 'noerror)
     (progn
-      (defhydra hydra-search (:color blue)
+      (defhydra hydra-search (:color blue :columns 4)
         "hydra-search"
         ("RET" helm-swoop "helm-swoop")
         ("b" helm-swoop-back-to-last-point "helm-swoop-back-to-last-point")
@@ -951,9 +1118,14 @@ This is used to set `sql-alternate-buffer-name' within
   (message "** hydra is not installed"))
 
 (defun copy-buffer-file-name ()
-  "Add `buffer-file-name' to `kill-ring'"
+  "Add `buffer-file-name' to `kill-ring' and echo the value to
+the minibuffer"
   (interactive)
-  (kill-new buffer-file-name t))
+  (if buffer-file-name
+      (progn
+      (kill-new buffer-file-name t)
+      (message buffer-file-name))
+    (message "no file associated with this buffer")))
 (make-alias 'copy-buffer-file-name)
 
 (defun copy-and-comment ()
@@ -1001,8 +1173,6 @@ following line."
 
 (setq ns-pop-up-frames nil)
 
-(require 'lockstep)
-
 (condition-case nil
     (progn
       (require 'discover)
@@ -1018,6 +1188,13 @@ following line."
   (error (message "** could not load poly-markdown")))
 
 (push '("\\.Rmd" . poly-markdown+r-mode) auto-mode-alist)
+
+(use-package dired-x
+  :config
+  (progn
+    (setq dired-omit-verbose nil)
+    (add-hook 'dired-mode-hook #'dired-omit-mode)
+    (setq dired-omit-files "^\\.?#")))
 
 (put 'downcase-region 'disabled nil)
 (put 'upcase-region 'disabled nil)
